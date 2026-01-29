@@ -120,7 +120,8 @@
       },
       totalUsers: {},
       metrics: {},
-      dedupedUsers: {} // Deduped users per bucket+dimension
+      dedupedUsers: {}, // Deduped users per bucket+dimension
+      totalVolume: {} // Total events across all buckets per dimension
     };
 
     function formatNumber(num) {
@@ -142,6 +143,7 @@
       dashboardData.metrics = {};
       dashboardData.totalUsers = {};
       dashboardData.dedupedUsers = {};
+      dashboardData.totalVolume = {};
       var statesSet = {};
 
       data.data.forEach(function(row) {
@@ -169,10 +171,12 @@
           if (dedupedBucket !== null) {
             dashboardData.dedupedUsers[key] = dedupedBucket;
           }
+          // Track total volume across all buckets
+          dashboardData.totalVolume[device] = (dashboardData.totalVolume[device] || 0) + events;
         }
 
-        // Handle state data
-        if (state) {
+        // Handle state data (filter out Tableau's %null% representation)
+        if (state && state !== '%null%' && state.toLowerCase() !== 'null') {
           statesSet[state] = true;
           dashboardData.totalUsers['state_' + state] = total;
           var stateKey = 'state_' + state + '|' + bucket;
@@ -185,6 +189,9 @@
           if (dedupedBucket !== null) {
             dashboardData.dedupedUsers[stateKey] = dedupedBucket;
           }
+          // Track total volume across all buckets for state
+          var stateVolKey = 'state_' + state;
+          dashboardData.totalVolume[stateVolKey] = (dashboardData.totalVolume[stateVolKey] || 0) + events;
         }
       });
 
@@ -221,6 +228,11 @@
       html += '<div class="control-group"><span class="control-label">' + dimLabel + ':</span>';
       html += '<div class="dim-filter">';
       html += '<button class="dim-btn' + (dashboardData.selectedDims.length === dims.length ? ' active' : '') + '" onclick="toggleAllDims()">All</button>';
+      html += '<button class="dim-btn' + (dashboardData.selectedDims.length === 0 ? ' active' : '') + '" onclick="selectNone()">None</button>';
+      if (!isDevice && dims.length > 5) {
+        html += '<button class="dim-btn" onclick="selectTopN(5)">Top 5</button>';
+        html += '<button class="dim-btn" onclick="selectTopN(10)">Top 10</button>';
+      }
       dims.forEach(function(d) {
         var isSelected = dashboardData.selectedDims.indexOf(d) !== -1;
         html += '<button class="dim-btn' + (isSelected ? ' active' : '') + '" onclick="toggleDim(\'' + d + '\')">' + d + '</button>';
@@ -330,6 +342,26 @@
     window.toggleAllDims = function() {
       var dims = dashboardData.viewMode === 'device' ? dashboardData.devices : dashboardData.states;
       dashboardData.selectedDims = dims.slice();
+      render();
+    };
+
+    window.selectNone = function() {
+      dashboardData.selectedDims = [];
+      render();
+    };
+
+    window.selectTopN = function(n) {
+      var isDevice = dashboardData.viewMode === 'device';
+      var dims = isDevice ? dashboardData.devices : dashboardData.states;
+
+      // Sort dimensions by total volume (descending)
+      var sorted = dims.slice().sort(function(a, b) {
+        var keyA = isDevice ? a : 'state_' + a;
+        var keyB = isDevice ? b : 'state_' + b;
+        return (dashboardData.totalVolume[keyB] || 0) - (dashboardData.totalVolume[keyA] || 0);
+      });
+
+      dashboardData.selectedDims = sorted.slice(0, n);
       render();
     };
 
