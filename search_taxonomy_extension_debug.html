@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Debug Extension</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tableau-extensions-api/1.12.0/tableau.extensions.1.12.0.min.js"></script>
+</head>
+<body>
+  <h1 id="status">Loading...</h1>
+  <pre id="log"></pre>
+
+  <script>
+    function log(msg) {
+      document.getElementById('log').innerHTML += msg + '\n';
+    }
+
+    log('1. Script started');
+
+    if (typeof tableau === 'undefined') {
+      log('ERROR: tableau object not found');
+      document.getElementById('status').innerText = 'ERROR: Tableau API not loaded';
+    } else {
+      log('2. tableau object exists');
+      log('3. Calling initializeAsync...');
+
+      tableau.extensions.initializeAsync().then(function() {
+        log('4. SUCCESS - initialized');
+        document.getElementById('status').innerText = 'Connected!';
+
+        var dashboard = tableau.extensions.dashboardContent.dashboard;
+        log('5. Dashboard name: ' + dashboard.name);
+        log('6. Worksheets: ' + dashboard.worksheets.length);
+
+        dashboard.worksheets.forEach(function(ws) {
+          log('   - ' + ws.name);
+        });
+
+        if (dashboard.worksheets.length > 0) {
+          var ws = dashboard.worksheets[0];
+          log('7. Getting data from: ' + ws.name);
+
+          ws.getSummaryDataAsync().then(function(data) {
+            log('8. Got data - ' + data.data.length + ' rows');
+            log('9. Columns: ' + data.columns.map(function(c) { return c.fieldName; }).join(', '));
+            if (data.data.length > 0) {
+              log('10. First row: ' + JSON.stringify(data.data[0].map(function(cell) { return cell.value; })));
+            }
+            document.getElementById('status').innerText = 'Data loaded! ' + data.data.length + ' rows';
+          }).catch(function(err) {
+            log('ERROR getting data: ' + err);
+            document.getElementById('status').innerText = 'Error: ' + err;
+          });
+        }
+      }).catch(function(err) {
+        log('ERROR in initializeAsync: ' + err);
+        document.getElementById('status').innerText = 'Init Error: ' + err;
+      });
+    }
+  </script>
+</body>
+</html>
