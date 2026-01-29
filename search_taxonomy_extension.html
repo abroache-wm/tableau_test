@@ -237,9 +237,11 @@
       // Calculate summary statistics (device-level only)
       dashboardData.summary = {
         totalVolume: 0,
+        totalUsers: 0,
         bucketVolume: { GLOBAL_SEARCH: 0, NAVIGATION_SEARCH: 0, SPECIFIC_SEARCH: 0 },
-        serpVolume: { total: 0, byDevice: {} },
-        listingMenuVolume: { total: 0, byDevice: {} },
+        bucketUsers: { GLOBAL_SEARCH: 0, NAVIGATION_SEARCH: 0, SPECIFIC_SEARCH: 0 },
+        serpVolume: { total: 0, users: 0, byDevice: {} },
+        listingMenuVolume: { total: 0, users: 0, byDevice: {} },
         searchBarOutcomes: {}
       };
 
@@ -248,16 +250,20 @@
         // Only count device-level data for summary (avoid double-counting with state data)
         if (m.dimType === 'device') {
           dashboardData.summary.bucketVolume[m.bucket] = (dashboardData.summary.bucketVolume[m.bucket] || 0) + m.totalEvents;
+          dashboardData.summary.bucketUsers[m.bucket] = (dashboardData.summary.bucketUsers[m.bucket] || 0) + m.totalUsers;
           dashboardData.summary.totalVolume += m.totalEvents;
+          dashboardData.summary.totalUsers += m.totalUsers;
 
           // Track SERP and LISTING_MENU specifically
           m.outcomes.forEach(function(o) {
             if (o.outcome === 'SERP') {
               dashboardData.summary.serpVolume.total += o.events;
+              dashboardData.summary.serpVolume.users += o.users;
               dashboardData.summary.serpVolume.byDevice[m.dim] = (dashboardData.summary.serpVolume.byDevice[m.dim] || 0) + o.events;
             }
             if (o.outcome === 'LISTING_MENU') {
               dashboardData.summary.listingMenuVolume.total += o.events;
+              dashboardData.summary.listingMenuVolume.users += o.users;
               dashboardData.summary.listingMenuVolume.byDevice[m.dim] = (dashboardData.summary.listingMenuVolume.byDevice[m.dim] || 0) + o.events;
             }
 
@@ -329,7 +335,7 @@
       // Total volume card
       html += '<div class="summary-card">';
       html += '<div class="summary-card-title">Total Search Volume</div>';
-      html += '<div class="summary-big-number">' + formatNumber(s.totalVolume) + '</div>';
+      html += '<div class="summary-big-number">' + formatNumber(s.totalVolume) + ' <span style="font-size:12px;opacity:0.8">events</span> / ' + formatNumber(s.totalUsers) + ' <span style="font-size:12px;opacity:0.8">users</span></div>';
       html += '<div class="summary-breakdown">';
       var buckets = ['GLOBAL_SEARCH', 'NAVIGATION_SEARCH', 'SPECIFIC_SEARCH'];
       var bucketLabels = { GLOBAL_SEARCH: 'Global', NAVIGATION_SEARCH: 'Navigation', SPECIFIC_SEARCH: 'Surface' };
@@ -343,7 +349,7 @@
       // SERP volume card
       html += '<div class="summary-card">';
       html += '<div class="summary-card-title">SERP Volume (Global Search)</div>';
-      html += '<div class="summary-big-number">' + formatNumber(s.serpVolume.total) + '</div>';
+      html += '<div class="summary-big-number">' + formatNumber(s.serpVolume.total) + ' <span style="font-size:12px;opacity:0.8">events</span> / ' + formatNumber(s.serpVolume.users) + ' <span style="font-size:12px;opacity:0.8">users</span></div>';
       html += '<div class="summary-breakdown">';
       dashboardData.devices.forEach(function(d) {
         var vol = s.serpVolume.byDevice[d] || 0;
@@ -353,33 +359,32 @@
       });
       html += '</div></div>';
 
-      // Search bar outcomes card (Global + Navigation combined)
-      html += '<div class="summary-card">';
-      html += '<div class="summary-card-title">Outcomes After Clicking Search Bar (Global + Navigation)</div>';
-      var searchBarTotal = Object.values(s.searchBarOutcomes).reduce(function(a, b) { return a + b; }, 0);
-      html += '<div class="summary-big-number">' + formatNumber(searchBarTotal) + '</div>';
-      html += '<div class="summary-breakdown">';
-      // Sort outcomes by volume descending
-      var sortedOutcomes = Object.keys(s.searchBarOutcomes).sort(function(a, b) {
-        return s.searchBarOutcomes[b] - s.searchBarOutcomes[a];
-      });
-      sortedOutcomes.slice(0, 5).forEach(function(outcome) {
-        var vol = s.searchBarOutcomes[outcome];
-        var pct = searchBarTotal > 0 ? (100 * vol / searchBarTotal).toFixed(1) : 0;
-        html += '<div class="summary-breakdown-row"><span class="summary-breakdown-label">' + outcome + '</span><span class="summary-breakdown-value">' + pct + '%</span></div>';
-        html += '<div class="summary-bar"><div class="summary-bar-fill" style="width:' + pct + '%"></div></div>';
-      });
-      html += '</div></div>';
-
       // Listing Menu volume card
       html += '<div class="summary-card">';
       html += '<div class="summary-card-title">Listing Menu Volume (Surface Search)</div>';
-      html += '<div class="summary-big-number">' + formatNumber(s.listingMenuVolume.total) + '</div>';
+      html += '<div class="summary-big-number">' + formatNumber(s.listingMenuVolume.total) + ' <span style="font-size:12px;opacity:0.8">events</span> / ' + formatNumber(s.listingMenuVolume.users) + ' <span style="font-size:12px;opacity:0.8">users</span></div>';
       html += '<div class="summary-breakdown">';
       dashboardData.devices.forEach(function(d) {
         var vol = s.listingMenuVolume.byDevice[d] || 0;
         var pct = s.listingMenuVolume.total > 0 ? (100 * vol / s.listingMenuVolume.total).toFixed(1) : 0;
         html += '<div class="summary-breakdown-row"><span class="summary-breakdown-label">' + d + '</span><span class="summary-breakdown-value">' + pct + '%</span></div>';
+        html += '<div class="summary-bar"><div class="summary-bar-fill" style="width:' + pct + '%"></div></div>';
+      });
+      html += '</div></div>';
+
+      // Search bar outcomes card (Global + Navigation combined) - no big number, just percentages
+      html += '<div class="summary-card">';
+      html += '<div class="summary-card-title">Outcomes After Clicking Search Bar (Global + Navigation)</div>';
+      var searchBarTotal = Object.values(s.searchBarOutcomes).reduce(function(a, b) { return a + b; }, 0);
+      html += '<div class="summary-breakdown" style="margin-top:0; padding-top:0; border-top:none;">';
+      // Sort outcomes by volume descending
+      var sortedOutcomes = Object.keys(s.searchBarOutcomes).sort(function(a, b) {
+        return s.searchBarOutcomes[b] - s.searchBarOutcomes[a];
+      });
+      sortedOutcomes.slice(0, 6).forEach(function(outcome) {
+        var vol = s.searchBarOutcomes[outcome];
+        var pct = searchBarTotal > 0 ? (100 * vol / searchBarTotal).toFixed(1) : 0;
+        html += '<div class="summary-breakdown-row"><span class="summary-breakdown-label">' + outcome + '</span><span class="summary-breakdown-value">' + pct + '%</span></div>';
         html += '<div class="summary-bar"><div class="summary-bar-fill" style="width:' + pct + '%"></div></div>';
       });
       html += '</div></div>';
