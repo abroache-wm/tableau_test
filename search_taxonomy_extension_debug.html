@@ -4,58 +4,50 @@
   <title>Debug Extension</title>
 </head>
 <body>
-  <h1 id="status">Loading...</h1>
+  <h1 id="status">Script not started</h1>
   <pre id="log"></pre>
 
   <script>
-    function log(msg) {
-      document.getElementById('log').innerHTML += msg + '\n';
-    }
+    document.getElementById('status').innerText = 'Script running...';
+    document.getElementById('log').innerHTML = '1. Script started\n';
 
-    // Wait for page to fully load
-    window.onload = function() {
-      log('1. Page loaded');
-      log('2. Checking for tableau object...');
+    try {
+      document.getElementById('log').innerHTML += '2. typeof tableau = ' + typeof tableau + '\n';
 
       if (typeof tableau === 'undefined') {
-      log('ERROR: tableau object not found');
-      document.getElementById('status').innerText = 'ERROR: Tableau API not loaded';
-    } else {
-      log('2. tableau object exists');
-      log('3. Calling initializeAsync...');
+        document.getElementById('status').innerText = 'ERROR: No tableau object';
+        document.getElementById('log').innerHTML += 'ERROR: tableau is undefined\n';
+      } else {
+        document.getElementById('log').innerHTML += '3. tableau exists, calling initializeAsync...\n';
 
-      tableau.extensions.initializeAsync().then(function() {
-        log('4. SUCCESS - initialized');
-        document.getElementById('status').innerText = 'Connected!';
+        tableau.extensions.initializeAsync().then(function() {
+          document.getElementById('log').innerHTML += '4. Initialized!\n';
+          document.getElementById('status').innerText = 'Connected!';
 
-        var dashboard = tableau.extensions.dashboardContent.dashboard;
-        log('5. Dashboard name: ' + dashboard.name);
-        log('6. Worksheets: ' + dashboard.worksheets.length);
+          var dashboard = tableau.extensions.dashboardContent.dashboard;
+          document.getElementById('log').innerHTML += '5. Dashboard: ' + dashboard.name + '\n';
+          document.getElementById('log').innerHTML += '6. Worksheets: ' + dashboard.worksheets.length + '\n';
 
-        dashboard.worksheets.forEach(function(ws) {
-          log('   - ' + ws.name);
+          if (dashboard.worksheets.length > 0) {
+            var ws = dashboard.worksheets[0];
+            document.getElementById('log').innerHTML += '7. Reading: ' + ws.name + '\n';
+
+            ws.getSummaryDataAsync().then(function(data) {
+              document.getElementById('log').innerHTML += '8. Rows: ' + data.data.length + '\n';
+              document.getElementById('log').innerHTML += '9. Cols: ' + data.columns.map(function(c) { return c.fieldName; }).join(', ') + '\n';
+              document.getElementById('status').innerText = 'Got ' + data.data.length + ' rows!';
+            }).catch(function(e) {
+              document.getElementById('log').innerHTML += 'Data error: ' + e + '\n';
+            });
+          }
+        }).catch(function(e) {
+          document.getElementById('log').innerHTML += 'Init error: ' + e + '\n';
+          document.getElementById('status').innerText = 'Init failed: ' + e;
         });
-
-        if (dashboard.worksheets.length > 0) {
-          var ws = dashboard.worksheets[0];
-          log('7. Getting data from: ' + ws.name);
-
-          ws.getSummaryDataAsync().then(function(data) {
-            log('8. Got data - ' + data.data.length + ' rows');
-            log('9. Columns: ' + data.columns.map(function(c) { return c.fieldName; }).join(', '));
-            if (data.data.length > 0) {
-              log('10. First row: ' + JSON.stringify(data.data[0].map(function(cell) { return cell.value; })));
-            }
-            document.getElementById('status').innerText = 'Data loaded! ' + data.data.length + ' rows';
-          }).catch(function(err) {
-            log('ERROR getting data: ' + err);
-            document.getElementById('status').innerText = 'Error: ' + err;
-          });
-        }
-      }).catch(function(err) {
-        log('ERROR in initializeAsync: ' + err);
-        document.getElementById('status').innerText = 'Init Error: ' + err;
-      });
+      }
+    } catch(e) {
+      document.getElementById('status').innerText = 'JS Error';
+      document.getElementById('log').innerHTML += 'Caught: ' + e + '\n';
     }
   </script>
 </body>
