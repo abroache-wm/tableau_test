@@ -2,53 +2,41 @@
 <html>
 <head>
   <title>Debug Extension</title>
-  <script src="https://public.tableau.com/javascripts/api/tableau.extensions.1.latest.min.js"></script>
+  <script src="https://extensions.tableauusercontent.com/resources/tableau.extensions.1.latest.min.js"></script>
 </head>
 <body>
-  <h1 id="status">Script not started</h1>
+  <h1 id="status">Loading...</h1>
   <pre id="log"></pre>
 
   <script>
-    document.getElementById('status').innerText = 'Script running...';
-    document.getElementById('log').innerHTML = '1. Script started\n';
+    var log = document.getElementById('log');
+    log.innerHTML = '1. Script started\n';
+    log.innerHTML += '2. typeof tableau = ' + typeof tableau + '\n';
 
-    try {
-      document.getElementById('log').innerHTML += '2. typeof tableau = ' + typeof tableau + '\n';
+    if (typeof tableau !== 'undefined') {
+      log.innerHTML += '3. Calling initializeAsync...\n';
+      tableau.extensions.initializeAsync().then(function() {
+        log.innerHTML += '4. Connected!\n';
+        document.getElementById('status').innerText = 'Connected!';
 
-      if (typeof tableau === 'undefined') {
-        document.getElementById('status').innerText = 'ERROR: No tableau object';
-        document.getElementById('log').innerHTML += 'ERROR: tableau is undefined\n';
-      } else {
-        document.getElementById('log').innerHTML += '3. tableau exists, calling initializeAsync...\n';
+        var dashboard = tableau.extensions.dashboardContent.dashboard;
+        log.innerHTML += '5. Worksheets: ' + dashboard.worksheets.length + '\n';
 
-        tableau.extensions.initializeAsync().then(function() {
-          document.getElementById('log').innerHTML += '4. Initialized!\n';
-          document.getElementById('status').innerText = 'Connected!';
-
-          var dashboard = tableau.extensions.dashboardContent.dashboard;
-          document.getElementById('log').innerHTML += '5. Dashboard: ' + dashboard.name + '\n';
-          document.getElementById('log').innerHTML += '6. Worksheets: ' + dashboard.worksheets.length + '\n';
-
-          if (dashboard.worksheets.length > 0) {
-            var ws = dashboard.worksheets[0];
-            document.getElementById('log').innerHTML += '7. Reading: ' + ws.name + '\n';
-
-            ws.getSummaryDataAsync().then(function(data) {
-              document.getElementById('log').innerHTML += '8. Rows: ' + data.data.length + '\n';
-              document.getElementById('log').innerHTML += '9. Cols: ' + data.columns.map(function(c) { return c.fieldName; }).join(', ') + '\n';
-              document.getElementById('status').innerText = 'Got ' + data.data.length + ' rows!';
-            }).catch(function(e) {
-              document.getElementById('log').innerHTML += 'Data error: ' + e + '\n';
-            });
-          }
-        }).catch(function(e) {
-          document.getElementById('log').innerHTML += 'Init error: ' + e + '\n';
-          document.getElementById('status').innerText = 'Init failed: ' + e;
-        });
-      }
-    } catch(e) {
-      document.getElementById('status').innerText = 'JS Error';
-      document.getElementById('log').innerHTML += 'Caught: ' + e + '\n';
+        if (dashboard.worksheets.length > 0) {
+          dashboard.worksheets[0].getSummaryDataAsync().then(function(data) {
+            log.innerHTML += '6. Got ' + data.data.length + ' rows\n';
+            log.innerHTML += '7. Columns: ' + data.columns.map(function(c){return c.fieldName}).join(', ') + '\n';
+            document.getElementById('status').innerText = 'Success! ' + data.data.length + ' rows';
+          }).catch(function(e) {
+            log.innerHTML += 'Data error: ' + e + '\n';
+          });
+        }
+      }).catch(function(e) {
+        log.innerHTML += 'Init error: ' + e + '\n';
+      });
+    } else {
+      log.innerHTML += 'ERROR: tableau is undefined\n';
+      document.getElementById('status').innerText = 'ERROR: No tableau object';
     }
   </script>
 </body>
