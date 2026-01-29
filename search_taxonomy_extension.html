@@ -108,7 +108,11 @@
     /* Summary statistics */
     .summary-section { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 20px; margin-bottom: 20px; color: #fff; }
     .summary-title { font-size: 14px; font-weight: 700; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px; }
-    .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .summary-toggle { padding: 4px 10px; font-size: 9px; font-weight: 600; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; }
+    .summary-toggle:hover { border-color: #666; }
+    .summary-toggle.active { background: #667eea; border-color: #667eea; color: #fff; }
+    .summary-section.hidden { display: none; }
     .summary-card { background: rgba(255,255,255,0.15); border-radius: 8px; padding: 12px; }
     .summary-card-title { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.9; margin-bottom: 8px; }
     .summary-big-number { font-size: 24px; font-weight: 700; font-family: 'SF Mono', Monaco, monospace; }
@@ -143,8 +147,10 @@
         totalVolume: 0,
         bucketVolume: { GLOBAL_SEARCH: 0, NAVIGATION_SEARCH: 0, SPECIFIC_SEARCH: 0 },
         serpVolume: { total: 0, byDevice: {} },
-        listingMenuVolume: { total: 0, byDevice: {} }
-      }
+        listingMenuVolume: { total: 0, byDevice: {} },
+        searchBarOutcomes: {} // Combined Global + Nav outcomes (NAV_ prefix removed)
+      },
+      showSummary: true
     };
 
     function formatNumber(num) {
@@ -233,7 +239,8 @@
         totalVolume: 0,
         bucketVolume: { GLOBAL_SEARCH: 0, NAVIGATION_SEARCH: 0, SPECIFIC_SEARCH: 0 },
         serpVolume: { total: 0, byDevice: {} },
-        listingMenuVolume: { total: 0, byDevice: {} }
+        listingMenuVolume: { total: 0, byDevice: {} },
+        searchBarOutcomes: {}
       };
 
       Object.keys(dashboardData.metrics).forEach(function(k) {
@@ -252,6 +259,12 @@
             if (o.outcome === 'LISTING_MENU') {
               dashboardData.summary.listingMenuVolume.total += o.events;
               dashboardData.summary.listingMenuVolume.byDevice[m.dim] = (dashboardData.summary.listingMenuVolume.byDevice[m.dim] || 0) + o.events;
+            }
+
+            // Track search bar outcomes (Global + Navigation combined, remove NAV_ prefix)
+            if (m.bucket === 'GLOBAL_SEARCH' || m.bucket === 'NAVIGATION_SEARCH') {
+              var outcomeKey = o.outcome.replace(/^NAV_/, '');
+              dashboardData.summary.searchBarOutcomes[outcomeKey] = (dashboardData.summary.searchBarOutcomes[outcomeKey] || 0) + o.events;
             }
           });
         }
@@ -294,6 +307,7 @@
       });
       html += '</div></div>';
 
+      html += '<button class="summary-toggle' + (dashboardData.showSummary ? ' active' : '') + '" onclick="toggleSummary()">Summary</button>';
       html += '<div class="data-status">Live from Tableau</div>';
       html += '<button class="export-btn" onclick="exportCSV()">Export CSV</button>';
       html += '</div>';
@@ -308,7 +322,7 @@
 
       // Summary statistics section
       var s = dashboardData.summary;
-      html += '<div class="summary-section">';
+      html += '<div class="summary-section' + (dashboardData.showSummary ? '' : ' hidden') + '">';
       html += '<div class="summary-title">Summary Statistics</div>';
       html += '<div class="summary-grid">';
 
@@ -339,9 +353,27 @@
       });
       html += '</div></div>';
 
+      // Search bar outcomes card (Global + Navigation combined)
+      html += '<div class="summary-card">';
+      html += '<div class="summary-card-title">Outcomes After Clicking Search Bar (Global + Navigation)</div>';
+      var searchBarTotal = Object.values(s.searchBarOutcomes).reduce(function(a, b) { return a + b; }, 0);
+      html += '<div class="summary-big-number">' + formatNumber(searchBarTotal) + '</div>';
+      html += '<div class="summary-breakdown">';
+      // Sort outcomes by volume descending
+      var sortedOutcomes = Object.keys(s.searchBarOutcomes).sort(function(a, b) {
+        return s.searchBarOutcomes[b] - s.searchBarOutcomes[a];
+      });
+      sortedOutcomes.slice(0, 5).forEach(function(outcome) {
+        var vol = s.searchBarOutcomes[outcome];
+        var pct = searchBarTotal > 0 ? (100 * vol / searchBarTotal).toFixed(1) : 0;
+        html += '<div class="summary-breakdown-row"><span class="summary-breakdown-label">' + outcome + '</span><span class="summary-breakdown-value">' + pct + '%</span></div>';
+        html += '<div class="summary-bar"><div class="summary-bar-fill" style="width:' + pct + '%"></div></div>';
+      });
+      html += '</div></div>';
+
       // Listing Menu volume card
       html += '<div class="summary-card">';
-      html += '<div class="summary-card-title">Listing Menu Volume (Surface)</div>';
+      html += '<div class="summary-card-title">Listing Menu Volume (Surface Search)</div>';
       html += '<div class="summary-big-number">' + formatNumber(s.listingMenuVolume.total) + '</div>';
       html += '<div class="summary-breakdown">';
       dashboardData.devices.forEach(function(d) {
@@ -451,6 +483,11 @@
 
     window.selectNone = function() {
       dashboardData.selectedDims = [];
+      render();
+    };
+
+    window.toggleSummary = function() {
+      dashboardData.showSummary = !dashboardData.showSummary;
       render();
     };
 
