@@ -104,6 +104,20 @@
     .data-status { background: #e8f5e9; border: 1px solid #4caf50; border-radius: 6px; padding: 4px 10px; font-size: 10px; font-weight: 600; color: #2e7d32; }
     .export-btn { padding: 6px 14px; font-size: 10px; font-weight: 600; border: 2px solid #1976d2; border-radius: 6px; background: #fff; color: #1976d2; cursor: pointer; margin-left: auto; }
     .export-btn:hover { background: #1976d2; color: #fff; }
+
+    /* Summary statistics */
+    .summary-section { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 20px; margin-bottom: 20px; color: #fff; }
+    .summary-title { font-size: 14px; font-weight: 700; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .summary-card { background: rgba(255,255,255,0.15); border-radius: 8px; padding: 12px; }
+    .summary-card-title { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.9; margin-bottom: 8px; }
+    .summary-big-number { font-size: 24px; font-weight: 700; font-family: 'SF Mono', Monaco, monospace; }
+    .summary-breakdown { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.2); }
+    .summary-breakdown-row { display: flex; justify-content: space-between; font-size: 10px; padding: 3px 0; }
+    .summary-breakdown-label { opacity: 0.85; }
+    .summary-breakdown-value { font-weight: 600; font-family: 'SF Mono', Monaco, monospace; }
+    .summary-bar { height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; margin-top: 4px; overflow: hidden; }
+    .summary-bar-fill { height: 100%; background: rgba(255,255,255,0.8); border-radius: 2px; }
   </style>
 </head>
 <body>
@@ -124,7 +138,13 @@
       metrics: {},
       dedupedUsers: {}, // Deduped users per bucket+dimension
       totalVolume: {}, // Total events across all buckets per dimension
-      rawData: null // Store raw Tableau data for export
+      rawData: null, // Store raw Tableau data for export
+      summary: {
+        totalVolume: 0,
+        bucketVolume: { GLOBAL_SEARCH: 0, NAVIGATION_SEARCH: 0, SPECIFIC_SEARCH: 0 },
+        serpVolume: { total: 0, byDevice: {} },
+        listingMenuVolume: { total: 0, byDevice: {} }
+      }
     };
 
     function formatNumber(num) {
@@ -208,6 +228,35 @@
         dashboardData.metrics[k].outcomes.sort(function(a, b) { return b.events - a.events; });
       });
 
+      // Calculate summary statistics (device-level only)
+      dashboardData.summary = {
+        totalVolume: 0,
+        bucketVolume: { GLOBAL_SEARCH: 0, NAVIGATION_SEARCH: 0, SPECIFIC_SEARCH: 0 },
+        serpVolume: { total: 0, byDevice: {} },
+        listingMenuVolume: { total: 0, byDevice: {} }
+      };
+
+      Object.keys(dashboardData.metrics).forEach(function(k) {
+        var m = dashboardData.metrics[k];
+        // Only count device-level data for summary (avoid double-counting with state data)
+        if (m.dimType === 'device') {
+          dashboardData.summary.bucketVolume[m.bucket] = (dashboardData.summary.bucketVolume[m.bucket] || 0) + m.totalEvents;
+          dashboardData.summary.totalVolume += m.totalEvents;
+
+          // Track SERP and LISTING_MENU specifically
+          m.outcomes.forEach(function(o) {
+            if (o.outcome === 'SERP') {
+              dashboardData.summary.serpVolume.total += o.events;
+              dashboardData.summary.serpVolume.byDevice[m.dim] = (dashboardData.summary.serpVolume.byDevice[m.dim] || 0) + o.events;
+            }
+            if (o.outcome === 'LISTING_MENU') {
+              dashboardData.summary.listingMenuVolume.total += o.events;
+              dashboardData.summary.listingMenuVolume.byDevice[m.dim] = (dashboardData.summary.listingMenuVolume.byDevice[m.dim] || 0) + o.events;
+            }
+          });
+        }
+      });
+
       // Initialize selected dimensions
       if (dashboardData.selectedDims.length === 0) {
         dashboardData.selectedDims = dashboardData.devices.slice();
@@ -255,6 +304,54 @@
       html += '<button class="filter-btn global-btn" onclick="filterBucket(\'global\')">Global Search</button>';
       html += '<button class="filter-btn navigation-btn" onclick="filterBucket(\'navigation\')">Navigation</button>';
       html += '<button class="filter-btn surface-btn" onclick="filterBucket(\'surface\')">Surface</button>';
+      html += '</div></div>';
+
+      // Summary statistics section
+      var s = dashboardData.summary;
+      html += '<div class="summary-section">';
+      html += '<div class="summary-title">Summary Statistics</div>';
+      html += '<div class="summary-grid">';
+
+      // Total volume card
+      html += '<div class="summary-card">';
+      html += '<div class="summary-card-title">Total Search Volume</div>';
+      html += '<div class="summary-big-number">' + formatNumber(s.totalVolume) + '</div>';
+      html += '<div class="summary-breakdown">';
+      var buckets = ['GLOBAL_SEARCH', 'NAVIGATION_SEARCH', 'SPECIFIC_SEARCH'];
+      var bucketLabels = { GLOBAL_SEARCH: 'Global', NAVIGATION_SEARCH: 'Navigation', SPECIFIC_SEARCH: 'Surface' };
+      buckets.forEach(function(b) {
+        var pct = s.totalVolume > 0 ? (100 * s.bucketVolume[b] / s.totalVolume).toFixed(1) : 0;
+        html += '<div class="summary-breakdown-row"><span class="summary-breakdown-label">' + bucketLabels[b] + '</span><span class="summary-breakdown-value">' + pct + '%</span></div>';
+        html += '<div class="summary-bar"><div class="summary-bar-fill" style="width:' + pct + '%"></div></div>';
+      });
+      html += '</div></div>';
+
+      // SERP volume card
+      html += '<div class="summary-card">';
+      html += '<div class="summary-card-title">SERP Volume (Global Search)</div>';
+      html += '<div class="summary-big-number">' + formatNumber(s.serpVolume.total) + '</div>';
+      html += '<div class="summary-breakdown">';
+      dashboardData.devices.forEach(function(d) {
+        var vol = s.serpVolume.byDevice[d] || 0;
+        var pct = s.serpVolume.total > 0 ? (100 * vol / s.serpVolume.total).toFixed(1) : 0;
+        html += '<div class="summary-breakdown-row"><span class="summary-breakdown-label">' + d + '</span><span class="summary-breakdown-value">' + pct + '%</span></div>';
+        html += '<div class="summary-bar"><div class="summary-bar-fill" style="width:' + pct + '%"></div></div>';
+      });
+      html += '</div></div>';
+
+      // Listing Menu volume card
+      html += '<div class="summary-card">';
+      html += '<div class="summary-card-title">Listing Menu Volume (Surface)</div>';
+      html += '<div class="summary-big-number">' + formatNumber(s.listingMenuVolume.total) + '</div>';
+      html += '<div class="summary-breakdown">';
+      dashboardData.devices.forEach(function(d) {
+        var vol = s.listingMenuVolume.byDevice[d] || 0;
+        var pct = s.listingMenuVolume.total > 0 ? (100 * vol / s.listingMenuVolume.total).toFixed(1) : 0;
+        html += '<div class="summary-breakdown-row"><span class="summary-breakdown-label">' + d + '</span><span class="summary-breakdown-value">' + pct + '%</span></div>';
+        html += '<div class="summary-bar"><div class="summary-bar-fill" style="width:' + pct + '%"></div></div>';
+      });
+      html += '</div></div>';
+
       html += '</div></div>';
 
       // Sections for each bucket
