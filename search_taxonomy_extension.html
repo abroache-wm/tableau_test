@@ -363,8 +363,18 @@
 </head>
 <body>
   <div id="app">
-    <div class="loading">Loading Tableau Extension...</div>
+    <div class="loading">Step 1: HTML loaded. Waiting for Tableau API...</div>
   </div>
+
+  <script>
+    // Timeout to detect if initialization hangs
+    setTimeout(() => {
+      const app = document.getElementById('app');
+      if (app.innerHTML.includes('Step 1')) {
+        app.innerHTML = '<div class="error">Tableau API did not initialize after 10 seconds. Make sure this is running inside a Tableau Dashboard.</div>';
+      }
+    }, 10000);
+  </script>
 
   <script>
     // Data structure to hold parsed data
@@ -686,9 +696,11 @@
     }
 
     // Initialize extension
+    document.getElementById('app').innerHTML = '<div class="loading">Step 2: Calling Tableau API...</div>';
+
     tableau.extensions.initializeAsync().then(() => {
       const app = document.getElementById('app');
-      app.innerHTML = '<div class="loading">Tableau connected. Finding worksheets...</div>';
+      app.innerHTML = '<div class="loading">Step 3: Tableau connected. Finding worksheets...</div>';
 
       const dashboard = tableau.extensions.dashboardContent.dashboard;
       const worksheets = dashboard.worksheets;
