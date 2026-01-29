@@ -2,7 +2,6 @@
 <html>
 <head>
   <title>Debug Extension</title>
-  <script src="https://extensions.tableauusercontent.com/HostedScripts/tableau.extensions.1.latest.min.js"></script>
 </head>
 <body>
   <h1 id="status">Loading...</h1>
@@ -13,9 +12,12 @@
       document.getElementById('log').innerHTML += msg + '\n';
     }
 
-    log('1. Script started');
+    // Wait for page to fully load
+    window.onload = function() {
+      log('1. Page loaded');
+      log('2. Checking for tableau object...');
 
-    if (typeof tableau === 'undefined') {
+      if (typeof tableau === 'undefined') {
       log('ERROR: tableau object not found');
       document.getElementById('status').innerText = 'ERROR: Tableau API not loaded';
     } else {
